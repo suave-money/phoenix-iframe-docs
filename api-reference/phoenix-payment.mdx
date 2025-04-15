@@ -1,0 +1,588 @@
+---
+title: 'Phoenix Payment'
+description: 'Learn how to integrate the Phoenix payment system into your application'
+---
+
+## What is Phoenix Market?
+
+Phoenix Market is a trustless P2P marketplace for USD-USDC transactions. Our platform enables seamless, secure trading between users without requiring KYC verification.
+
+<Info>
+  Phoenix is the fastest P2P marketplace for USD-USDC transactions. Because we never take custody of funds, Phoenix is the first P2P solution that allows users to quickly onramp with Zelle payments with no KYC.
+</Info>
+
+By operating outside the flow of funds similar to DEXs like Uniswap, Phoenix maintains a non-money transmitter status while still enforcing AML compliance via Anchain.ai to prevent interaction with sanctioned funds.
+
+## How It Works
+
+<Steps>
+  <Step title="Smart Contract Escrow">
+    Sellers lock their USDC in an escrow smart contract
+  </Step>
+  <Step title="Payment Initiation">
+    The buyer initiates a Zelle transfer through our provided webapp component
+  </Step>
+  <Step title="Payment Verification">
+    Phoenix uses Teller to verify that the USD payment has been made, upon which the USDC is automatically released to the buyer from escrow
+  </Step>
+  <Step title="Transaction Completion">
+    The buyer receives their USDC in under 2 minutes
+  </Step>
+</Steps>
+
+## Key Benefits for Your Business
+
+<CardGroup cols={2}>
+  <Card title="Expanded Services" icon="puzzle-piece">
+    Offer crypto access to your clients without complex exchange integrations
+  </Card>
+  <Card title="Regulatory Compliance" icon="shield-check">
+    Orders executed through proper banking channels with appropriate compliance measures
+  </Card>
+  <Card title="Risk Mitigation" icon="lock">
+    Structured settlement process with verification steps
+  </Card>
+  <Card title="Revenue Generation" icon="chart-line">
+    New revenue stream through crypto on-ramping fees
+  </Card>
+  <Card title="Customer Retention" icon="users">
+    Meet growing demand for crypto services within your existing platform
+  </Card>
+</CardGroup>
+
+## Payment Flows
+
+Phoenix supports two payment flows to accommodate different user scenarios:
+
+<Tabs>
+  <Tab title="Automated Zelle Payment">
+    <div className="flex items-start gap-3">
+      <div>
+        <p className="text-lg font-semibold mb-2">Seamless Bank Integration</p>
+        <p>Users can log in to their supported bank directly within the payment interface. The Zelle payment will be automatically executed on their behalf, creating a frictionless experience.</p>
+        
+        <div className="mt-4">
+          <p className="font-semibold">Supported Banks:</p>
+          <div className="flex flex-wrap gap-2 mt-2">
+            <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Chase</span>
+            <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Bank of America</span>
+            <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Capital One</span>
+            <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Citi</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <Warning className="mt-4">
+      <strong>Limitations:</strong> Teller (our banking integration provider) does not currently handle Multi-Factor Authentication (MFA) with Zelle. While Zelle rarely forces MFA, new users or those engaging in suspicious activity may be required to complete MFA. In these cases, users will be directed to the Manual Zelle Payment flow.
+    </Warning>
+  </Tab>
+  
+  <Tab title="Manual Zelle Payment">
+    <div className="flex items-start gap-3">
+      <div>
+        <p className="text-lg font-semibold mb-2">Universal Compatibility</p>
+        <p>For users without supported banks or those who encounter MFA issues, we offer a manual payment option. Users will:</p>
+        
+        <ol className="list-decimal pl-5 mt-2 space-y-1">
+          <li>Open their banking app or Zelle app</li>
+          <li>Make the Zelle payment manually to the provided recipient</li>
+          <li>Return to Phoenix where we verify the payment</li>
+          <li>Once verified, USDC is automatically released from escrow</li>
+        </ol>
+      </div>
+    </div>
+
+    <Info className="mt-4">
+      This flow works with any bank that supports Zelle, providing universal coverage for your users.
+    </Info>
+  </Tab>
+</Tabs>
+
+Both payment flows maintain the same security and verification standards, ensuring safe and compliant transactions regardless of which method your users choose.
+
+## Integration Implementation Guide
+
+There are two methods for integrating Phoenix into your application:
+
+<Tabs>
+  <Tab title="React Component">
+    Follow these steps to integrate using our pre-built React component.
+
+    ### Step 1: Download the Component
+
+    You can download the `PhoenixPayment.tsx` file from our snippets or use the code below:
+
+    <CodeGroup>
+    ```tsx PhoenixPayment.tsx
+    import React, { useEffect, useRef } from 'react';
+
+    interface PhoenixPaymentProps {
+      walletAddress: string;
+      amount: string;
+      onClose: () => void;
+      onComplete: (success: boolean, transactionId?: string) => void;
+    }
+
+    export const PhoenixPayment: React.FC<PhoenixPaymentProps> = ({
+      walletAddress,
+      amount,
+      onClose,
+      onComplete,
+    }) => {
+      const iframeRef = useRef<HTMLIFrameElement>(null);
+
+      useEffect(() => {
+        // Handle messages from the iframe
+        const handleMessage = (event: MessageEvent) => {
+          // Verify origin for security
+          if (event.origin !== 'http://localhost:5173') return;
+          
+          if (event.data?.type === 'PAYMENT_COMPLETE') {
+            onComplete(true, event.data.transactionId);
+          } else if (event.data?.type === 'PAYMENT_FAILED') {
+            onComplete(false);
+          }
+        };
+
+        window.addEventListener('message', handleMessage);
+        
+        // Clean up
+        return () => {
+          window.removeEventListener('message', handleMessage);
+        };
+      }, [onComplete]);
+
+      return (
+        <div className="phoenix-payment-container">
+          <div className="payment-overlay">
+            <div className="payment-modal">
+              <button 
+                className="close-button" 
+                onClick={onClose}
+                aria-label="Close payment window"
+              >
+                &times;
+              </button>
+              <iframe
+                ref={iframeRef}
+                src={`http://localhost:5173/?address=${walletAddress}&amount=${amount}`}
+                className="teller-iframe"
+                title="Phoenix Payment"
+                allow="clipboard-write"
+              />
+            </div>
+          </div>
+          <style jsx>{`
+            .phoenix-payment-container {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              z-index: 1000;
+            }
+            
+            .payment-overlay {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background-color: rgba(0, 0, 0, 0.5);
+              display: flex;
+              justify-content: center;
+              align-items: center;
+            }
+            
+            .payment-modal {
+              position: relative;
+              background-color: white;
+              border-radius: 12px;
+              padding: 20px;
+              box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            }
+            
+            .close-button {
+              position: absolute;
+              top: -15px;
+              right: -15px;
+              background-color: #333;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 30px;
+              height: 30px;
+              font-size: 18px;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1;
+            }
+            
+            .teller-iframe {
+              width: 350px;
+              height: 600px;
+              border: none;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            }
+          `}</style>
+        </div>
+      );
+    };
+
+    export default PhoenixPayment;
+    ```
+    </CodeGroup>
+
+    Save this file to your project's component directory, for example:
+    
+    ```
+    /src/components/PhoenixPayment.tsx
+    ```
+
+    <Info>
+      The component handles iframe setup, messaging, and lifecycle events automatically.
+    </Info>
+
+    ### Step 2: Add Essential CSS
+
+    Add this CSS to style the iframe. You have two options:
+
+    #### Option A: Add to your global CSS file
+    
+    If you have a global CSS file (like `styles.css` or `App.css`), add these styles:
+
+    ```css
+    .teller-iframe {
+      width: 350px;
+      height: 600px;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    ```
+
+    #### Option B: Use CSS modules
+    
+    Create a file called `PhoenixPayment.module.css` in the same directory as your component:
+
+    ```
+    /src/components/PhoenixPayment.module.css
+    ```
+
+    With the following content:
+
+    ```css
+    .teller-iframe {
+      width: 350px;
+      height: 600px;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+    ```
+
+    And then import it in your component:
+    
+    ```tsx
+    import styles from './PhoenixPayment.module.css';
+    ```
+
+    <Note>
+      The component already includes inline styles, so this step is optional if you're using the component as provided.
+    </Note>
+
+    ### Step 3: Implement the Component
+
+    Follow these three steps to implement the component in your application:
+
+    #### Step 3.1: Import the Component
+
+    ```tsx
+    import { PhoenixPayment } from './components/PhoenixPayment';
+    ```
+
+    #### Step 3.2: Add the Component to Your JSX
+
+    Before adding the component, you need to collect two essential pieces of information from your user:
+
+    1. **walletAddress**: The Ethereum wallet address where the user wants to receive USDC
+    2. **amount**: The amount in USD that the user wants to convert to USDC
+
+    You should create form inputs in your UI to collect this information:
+
+    ```tsx
+    // Example of collecting user input
+    const [walletAddress, setWalletAddress] = useState('');
+    const [amount, setAmount] = useState('');
+    
+    // Form inputs
+    <div>
+      <label htmlFor="wallet">Wallet Address:</label>
+      <input
+        id="wallet"
+        type="text"
+        value={walletAddress}
+        onChange={(e) => setWalletAddress(e.target.value)}
+        placeholder="0x..."
+      />
+    </div>
+    <div>
+      <label htmlFor="amount">Amount (USD):</label>
+      <input
+        id="amount"
+        type="number"
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+        placeholder="100"
+      />
+    </div>
+    ```
+
+    Once you have collected these values, you can pass them to the PhoenixPayment component:
+
+    ```tsx
+    <PhoenixPayment 
+      walletAddress={walletAddress}
+      amount={amount}
+      onClose={() => setShowPayment(false)}
+      onComplete={handlePaymentComplete}
+    />
+    ```
+
+    The component requires the following props:
+    - `walletAddress`: The Ethereum wallet address where USDC will be sent
+    - `amount`: The USD amount to convert to USDC
+    - `onClose`: A function to handle when the user closes the payment modal
+    - `onComplete`: A function to handle payment completion (success or failure)
+
+    #### Step 3.3: Handle Payment Completion
+
+    ```tsx
+    const handlePaymentComplete = (success, transactionId) => {
+      if (success) {
+        console.log(`Payment successful: ${transactionId}`);
+      } else {
+        console.log('Payment failed or cancelled');
+      }
+      setShowPayment(false);
+    };
+    ```
+
+    ### Full Implementation Example
+
+    Here's a complete example showing how all the pieces fit together:
+
+    ```tsx
+    import { useState } from 'react';
+    import { PhoenixPayment } from './components/PhoenixPayment';
+
+    function PaymentPage() {
+      const [walletAddress, setWalletAddress] = useState('');
+      const [amount, setAmount] = useState('');
+      const [showPayment, setShowPayment] = useState(false);
+      
+      const handlePaymentComplete = (success, transactionId) => {
+        if (success) {
+          console.log(`Payment successful: ${transactionId}`);
+        } else {
+          console.log('Payment failed or cancelled');
+        }
+        setShowPayment(false);
+      };
+      
+      return (
+        <>
+          {/* Your UI for collecting wallet address and amount */}
+          
+          <button onClick={() => setShowPayment(true)}>
+            Make Payment
+          </button>
+          
+          {showPayment && (
+            <PhoenixPayment 
+              walletAddress={walletAddress}
+              amount={amount}
+              onClose={() => setShowPayment(false)}
+              onComplete={handlePaymentComplete}
+            />
+          )}
+        </>
+      );
+    }
+    ```
+  </Tab>
+  <Tab title="Manual Integration">
+    For frameworks other than React or for custom implementations.
+
+    ### Step 1: Add the iframe to your HTML
+
+    ```html
+    <div id="payment-container" style="display: none;">
+      <iframe
+        id="phoenix-payment-iframe"
+        src="http://localhost:5173/"
+        style="width: 350px; height: 600px; border: none;"
+        title="Phoenix Payment"
+        allow="clipboard-write"
+      ></iframe>
+      <button id="cancel-payment-button">Cancel</button>
+    </div>
+    ```
+
+    ### Step 2: Add JavaScript for Communication
+
+    You need to add JavaScript functions to handle the integration. Here's a breakdown of what each function does and the required parameters:
+
+    #### Required Parameters
+
+    Before implementing the integration, you need to collect from your users:
+
+    1. **walletAddress**: The Ethereum wallet address where the user wants to receive USDC
+    2. **amount**: The amount in USD that the user wants to convert to USDC
+
+    You should create a form in your application to collect this information:
+
+    ```html
+    <div class="payment-form">
+      <div>
+        <label for="wallet">Wallet Address:</label>
+        <input id="wallet" type="text" placeholder="0x..." />
+      </div>
+      <div>
+        <label for="amount">Amount (USD):</label>
+        <input id="amount" type="number" placeholder="100" />
+      </div>
+      <button id="start-payment">Make Payment</button>
+    </div>
+    ```
+
+    #### Core Functions
+
+    ```javascript
+    // 1. Function to show payment iframe with parameters
+    // This function takes the wallet address and amount, sets up the iframe, and displays it
+    function showPayment(walletAddress, amount) {
+      const iframe = document.getElementById('phoenix-payment-iframe');
+      const container = document.getElementById('payment-container');
+      
+      // Set iframe parameters via URL query string
+      // Both parameters are required for the Phoenix service to work correctly
+      iframe.src = `http://localhost:5173/?address=${walletAddress}&amount=${amount}`;
+      
+      // Display the container that holds the iframe
+      container.style.display = 'block';
+      
+      // Set up event listener for messages from the iframe
+      window.addEventListener('message', handlePaymentMessage);
+      
+      // Set up cancel button functionality
+      document.getElementById('cancel-payment-button').onclick = hidePayment;
+    }
+
+    // 2. Function to handle messages received from the iframe
+    // This processes payment completions and failures
+    function handlePaymentMessage(event) {
+      // IMPORTANT: Verify origin for security to prevent cross-site scripting attacks
+      // This should match the domain where your Phoenix payment iframe is hosted
+      if (event.origin !== 'http://localhost:5173') return;
+      
+      // Handle successful payment - you'll receive a transaction ID
+      if (event.data?.type === 'PAYMENT_COMPLETE') {
+        console.log('Payment successful:', event.data.transactionId);
+        // You should store this transaction ID in your database
+        // and update your UI to show the payment was successful
+        hidePayment();
+      } 
+      // Handle failed or cancelled payment
+      else if (event.data?.type === 'PAYMENT_FAILED') {
+        console.log('Payment failed');
+        // Update your UI to show the payment failed
+        hidePayment();
+      }
+    }
+
+    // 3. Function to hide the payment iframe
+    // This cleans up the UI and removes event listeners
+    function hidePayment() {
+      document.getElementById('payment-container').style.display = 'none';
+      // IMPORTANT: Remove event listener to prevent memory leaks
+      window.removeEventListener('message', handlePaymentMessage);
+    }
+    ```
+
+    #### Connecting Everything
+
+    Add this script to connect your form to the payment flow:
+
+    ```javascript
+    // Set up the button click handler to start the payment process
+    document.getElementById('start-payment').addEventListener('click', function() {
+      // Get values from form inputs
+      const walletAddress = document.getElementById('wallet').value;
+      const amount = document.getElementById('amount').value;
+      
+      // Validate inputs (basic validation)
+      if (!walletAddress || !amount) {
+        alert('Please enter both wallet address and amount');
+        return;
+      }
+      
+      // Start payment process with collected values
+      showPayment(walletAddress, amount);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Communication Protocol
+
+The Phoenix payment iframe communicates with your application through the window.postMessage API:
+
+<CodeGroup>
+  ```javascript Success Message
+  {
+    type: 'PAYMENT_COMPLETE',
+    transactionId: '0x123...' // Transaction hash
+  }
+  ```
+
+  ```javascript Failure Message
+  {
+    type: 'PAYMENT_FAILED'
+  }
+  ```
+</CodeGroup>
+
+### Parameters from parent to iframe
+
+Parameters are passed via URL query string:
+
+```
+http://localhost:5173/?address=0xWALLET_ADDRESS&amount=AMOUNT_IN_USD
+```
+
+## Technical Requirements
+
+<Check>
+  **Iframe dimensions**: Must be exactly 350px × 600px
+</Check>
+<Check>
+  **Origin validation**: Verify message origins for security
+</Check>
+<Check>
+  **Parameters**: Both wallet address and amount must be provided
+</Check>
+
+## Production Deployment
+
+<Warning>
+  For production, update the iframe URL from `http://localhost:5173/` to the production Phoenix payment service URL.
+</Warning>
+
+## Support
+
+For more information or assistance, contact Phoenix support at main@phoenix.market 
